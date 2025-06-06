@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>逐字纠错流式故事</title>
+  <style>
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    #output {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      min-height: 300px;
+      line-height: 1.8;
+      font-size: 18px;
+    }
+    button {
+      padding: 12px 24px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s;
+      margin: 15px 0;
+    }
+    button:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background: #cccccc;
+      transform: none;
+    }
+    .cursor {
+      display: inline-block;
+      width: 10px;
+      height: 20px;
+      background: #4CAF50;
+      animation: blink 1s infinite;
+      vertical-align: middle;
+    }
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+    .correction {
+      color: #e53935;
+      position: relative;
+    }
+    .correction::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 1px;
+      background: #e53935;
+      animation: strike 0.3s forwards;
+    }
+    @keyframes strike {
+      to { width: 0; }
+    }
+    .corrected {
+      color: #2e7d32;
+      animation: popIn 0.3s;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <button id="startBtn">开始讲述故事</button>
+  <div id="output"></div>
+
+  <script>
+    // 故事数据（含需要纠错的部分）
+    const story = [
+      { text: "从前有座山，", delay: 30 },
+      { text: "山上有座庙，", delay: 30 },
+      { text: "庙里有个老和尚在讲故事。", delay: 30 },
+      { text: "\n\n", delay: 100 },
+      { text: "老和尚说：", delay: 30 },
+      { text: "\"在很久很久以前，", delay: 30 },
+      { text: "森林里住着", delay: 30 },
+      { text: "一只小免子，", delay: 30, correct: "小兔子" }, // 需要纠错
+      { text: "它有着", delay: 30 },
+      { text: "雪百的", delay: 30, correct: "雪白的" }, // 需要纠错
+      { text: "毛发和", delay: 30 },
+      { text: "红彤彤的", delay: 30 },
+      { text: "眼晴。", delay: 30, correct: "眼睛。" }, // 需要纠错
+      { text: "\"", delay: 30 },
+      { text: "\n\n", delay: 100 },
+      { text: "这只", delay: 30 },
+      { text: "特姝的", delay: 30, correct: "特殊的" }, // 需要纠错
+      { text: "小动物", delay: 30 },
+      { text: "每天都会", delay: 30 },
+      { text: "去森林里", delay: 30 },
+      { text: "探所", delay: 30, correct: "探索" }, // 需要纠错
+      { text: "新的地方。", delay: 30 },
+      { text: "\n\n", delay: 100 },
+      { text: "有一天，它发现了", delay: 30 },
+      { text: "一个神其的", delay: 30, correct: "神奇的" }, // 需要纠错
+      { text: "花园，", delay: 30 },
+      { text: "里面开满了", delay: 30 },
+      { text: "五采缤纷的", delay: 30, correct: "五彩缤纷的" }, // 需要纠错
+      { text: "花朵...", delay: 30 }
+    ];
+
+    const outputEl = document.getElementById('output');
+    const startBtn = document.getElementById('startBtn');
+    let isTelling = false;
+    let cursor;
+
+    // 逐字输出函数
+    async function typeWriter(text, speed, isError = false) {
+      return new Promise(resolve => {
+        let i = 0;
+        const span = document.createElement('span');
+        if (isError) span.className = 'correction';
+        outputEl.appendChild(span);
+        
+        const timer = setInterval(() => {
+          if (i < text.length) {
+            span.textContent = text.substring(0, i+1);
+            i++;
+          } else {
+            clearInterval(timer);
+            resolve();
+          }
+        }, speed);
+      });
+    }
+
+    // 逐字删除函数
+    async function backspace(text, speed) {
+      return new Promise(resolve => {
+        let i = text.length;
+        const span = outputEl.lastChild;
+        
+        const timer = setInterval(() => {
+          if (i > 0) {
+            span.textContent = text.substring(0, i-1);
+            i--;
+          } else {
+            clearInterval(timer);
+            outputEl.removeChild(span);
+            resolve();
+          }
+        }, speed);
+      });
+    }
+
+    // 开始讲故事
+    async function tellStory() {
+      if (isTelling) return;
+      isTelling = true;
+      startBtn.disabled = true;
+      outputEl.innerHTML = '';
+      
+      // 添加光标
+      cursor = document.createElement('span');
+      cursor.className = 'cursor';
+      outputEl.appendChild(cursor);
+      
+      for (const segment of story) {
+        // 移除光标
+        cursor.remove();
+        
+        if (segment.correct) {
+          // 先输出错误文本
+          await typeWriter(segment.text, 80, true);
+          
+          // 暂停一下让用户注意到错误
+          await new Promise(r => setTimeout(r, 500));
+          
+          // 逐字删除错误文本
+          await backspace(segment.text, 40);
+          
+          // 输出正确文本
+          const span = document.createElement('span');
+          span.className = 'corrected';
+          span.textContent = segment.correct;
+          outputEl.appendChild(span);
+          
+          // 暂停一下展示修正
+          await new Promise(r => setTimeout(r, 300));
+        } else {
+          // 正常输出文本
+          await typeWriter(segment.text, 80);
+        }
+        
+        // 重新添加光标
+        outputEl.appendChild(cursor);
+        outputEl.scrollTop = outputEl.scrollHeight;
+        
+        // 段落间额外停顿
+        if (segment.text === "\n\n") {
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          await new Promise(r => setTimeout(r, segment.delay));
+        }
+      }
+      
+      // 故事结束
+      cursor.remove();
+      isTelling = false;
+      startBtn.disabled = false;
+    }
+
+    startBtn.addEventListener('click', tellStory);
+  </script>
+</body>
+</html>
